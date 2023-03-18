@@ -1,0 +1,19 @@
+# dependencies
+/iDSimplify_Auth0_Custom_Authoriser/node_modules
+/iDSimplify_User_Service/node_modules
+/.pnp
+.pnp.js
+.vscode
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
