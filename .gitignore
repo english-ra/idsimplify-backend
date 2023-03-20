@@ -2,7 +2,7 @@
 /iDSimplify_Auth0_Custom_Authoriser/node_modules
 /iDSimplify_User_Service/node_modules
 /iDSimplify_Organisation_Service/node_modules
-/iDSimplify_Tenant_Service/node_modules
+/iDSimplify_Tenancy_Service/node_modules
 /.pnp
 .pnp.js
 .vscode

@@ -19,7 +19,7 @@ export const handler = async (event) => {
     let response;
 
     switch (true) {
-        case event.httpMethod === 'POST' && event.path === '/tenant':
+        case event.httpMethod === 'POST' && event.path === '/tenancy':
             response = createTenant(JSON.parse(event.body), event.requestContext);
             break;
         default:
@@ -52,7 +52,7 @@ const createTenant = async (requestBody, requestContext) => {
 
     // Build the item
     const tenancyData = {
-        tenantId: id,
+        tenancyId: id,
         name: requestBody.name,
         creationDetails: {
             createdBy: userID
