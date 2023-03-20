@@ -12,15 +12,15 @@ const TENANCY_TABLE = process.env.TENANCY_DB_TABLE;
 const REGION = process.env.REGION;
 
 
-const ddbClient = new DynamoDBClient({ region: REGION });
+const db = new DynamoDBClient({ region: REGION });
 
 // Lambda handler function
-export const handler = async (event, context) => {
+export const handler = async (event) => {
     let response;
 
     switch (true) {
         case event.httpMethod === 'POST' && event.path === '/tenant':
-            response = createTenant(JSON.parse(event.body));
+            response = createTenant(JSON.parse(event.body), event.requestContext);
             break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
@@ -35,11 +35,17 @@ export const handler = async (event, context) => {
 
 
 
-const createTenant = async (body) => {
+const createTenant = async (requestBody, requestContext) => {
 
     // Validate that the data is formatted correctly
-    const isDataValid = validateJSONWSchema(body, schemas['tenancy']);
+    const isDataValid = validateJSONWSchema(requestBody, schemas['tenancy']);
     if (!isDataValid) { return buildResponse(400, 'Incorrect Data'); }
+
+    console.log(requestContext);
+
+    // Get the users ID and validate
+    const userID = requestContext.authorizer.principalId;
+    if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
 
     // Generate a PK
     const id = crypto.randomUUID().toString();
@@ -47,7 +53,10 @@ const createTenant = async (body) => {
     // Build the item
     const tenancyData = {
         tenantId: id,
-        name: body.name
+        name: requestBody.name,
+        creationDetails: {
+            createdBy: userID
+        }
     };
 
     // Build the DB request
@@ -62,7 +71,7 @@ const createTenant = async (body) => {
 
     try {
         // Save data to the DB
-        const data = await ddbClient.send(new PutCommand(dbParams));
+        const data = await db.send(new PutCommand(dbParams));
 
         // Successful save - Build the response
         const responseBody = {
