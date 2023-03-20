@@ -20,7 +20,7 @@ export const handler = async (event) => {
 
     switch (true) {
         case event.httpMethod === 'POST' && event.path === '/tenancy':
-            response = createTenant(JSON.parse(event.body), event.requestContext);
+            response = createTenancy(JSON.parse(event.body), event.requestContext);
             break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
@@ -35,7 +35,7 @@ export const handler = async (event) => {
 
 
 
-const createTenant = async (requestBody, requestContext) => {
+const createTenancy = async (requestBody, requestContext) => {
 
     // Validate that the data is formatted correctly
     const isDataValid = validateJSONWSchema(requestBody, schemas['tenancy']);
@@ -63,9 +63,9 @@ const createTenant = async (requestBody, requestContext) => {
     const dbParams = {
         TableName: TENANCY_TABLE,
         Item: tenancyData,
-        ConditionExpression: "tenantId <> :tenantIdValue",
+        ConditionExpression: "tenancyId <> :tenancyIdValue",
         ExpressionAttributeValues: {
-            ":tenantIdValue": id
+            ":tenancyIdValue": id
         }
     };
 
