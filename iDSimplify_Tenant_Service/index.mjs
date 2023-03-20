@@ -1,22 +1,32 @@
+// Package imports
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import crypto from 'crypto';
 
-const ddbClient = new DynamoDBClient({ region: 'eu-west-2' });
+// Module imports
+import { validateJSONWSchema } from './JSONValidator.mjs';
+import schemas from "./schemas.mjs";
 
-export const handler = async(event) => {
-    // let response;
+// Environment variables
+const TENANCY_TABLE = process.env.TENANCY_DB_TABLE;
+const REGION = process.env.REGION;
 
-    // switch (true) {
-    //     case event.httpMethod === 'POST':
-    //         response = createUser(JSON.parse(event.body));
-    //         break;
-    //     default:
-    //         response = buildResponse(404, '404 Not Found');
-    // }
 
-    // return response;
-    console.log(event.body);
-    return buildResponse(200, 'Received');
+const ddbClient = new DynamoDBClient({ region: REGION });
+
+// Lambda handler function
+export const handler = async (event, context) => {
+    let response;
+
+    switch (true) {
+        case event.httpMethod === 'POST' && event.path === '/tenant':
+            response = createTenant(JSON.parse(event.body));
+            break;
+        default:
+            response = buildResponse(404, '404 Not Found in Lambda');
+    }
+
+    return response;
 };
 
 
@@ -25,23 +35,51 @@ export const handler = async(event) => {
 
 
 
-const createNewTenant = async (requestBody) => {
+const createTenant = async (body) => {
 
     // Validate that the data is formatted correctly
-    const isDataValid = validateJSONWScheme(requestBody, schemas['user']);
+    const isDataValid = validateJSONWSchema(body, schemas['tenancy']);
     if (!isDataValid) { return buildResponse(400, 'Incorrect Data'); }
 
-    const params = {
-        TableName: userTable,
-        Item: requestBody
+    // Generate a PK
+    const id = crypto.randomUUID().toString();
+
+    // Build the item
+    const tenancyData = {
+        tenantId: id,
+        name: body.name
+    };
+
+    // Build the DB request
+    const dbParams = {
+        TableName: TENANCY_TABLE,
+        Item: tenancyData,
+        ConditionExpression: "tenantId <> :tenantIdValue",
+        ExpressionAttributeValues: {
+            ":tenantIdValue": id
+        }
     };
 
     try {
-        const data = await ddbClient.send(new PutCommand(params));
-        const body = { Operation: 'SAVE', Message: 'SUCCESS', Item: requestBody };
-        return buildResponse(200, body);
-    } catch (err) {
+        // Save data to the DB
+        const data = await ddbClient.send(new PutCommand(dbParams));
+
+        // Successful save - Build the response
+        const responseBody = {
+            Operation: 'SAVE',
+            Message: 'Tenancy created successfully',
+            Item: tenancyData
+        };
+
+        // Send back response
+        return buildResponse(200, responseBody);
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
         console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to create tenancy');
     }
 };
 
@@ -54,7 +92,8 @@ function buildResponse(statusCode, body) {
         statusCode: statusCode,
         headers: {
             'Content-Type': 'application/json',
-            "Access-Control-Allow-Origin" : "*"
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": true // Required for cookies, authorization headers with HTTPS
         },
         body: JSON.stringify(body)
     }
