@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import validateJSONWScheme from './JSONValidator.mjs';
 import schemas from './schemas.mjs';
 
@@ -12,9 +12,14 @@ const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
 export const handler = async (event) => {
     let response;
 
+    console.log(event);
+
     switch (true) {
-        case event.httpMethod === 'POST' && event.path === '/user':
+        case event.httpMethod === 'POST' && event.path === '/users':
             response = createUser(JSON.parse(event.body), event.requestContext);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies':
+            response = getUsersTenancies(event);
             break;
         default:
             response = buildResponse(404, '404 Not Found');
@@ -22,6 +27,7 @@ export const handler = async (event) => {
 
     return response;
 };
+
 
 const createUser = async (requestBody, requestContext) => {
 
@@ -71,6 +77,104 @@ const createUser = async (requestBody, requestContext) => {
         return buildResponse(500, 'Unable to create user');
     }
 };
+
+
+const getUsersTenancies = async (event) => {
+
+    // Get the path parameters
+    const pathParameters = event.pathParameters;
+
+    // Check whether the user is authorised
+    let userID;
+    if (pathParameters.id === 'me') {
+        // Get the users ID and validate
+        userID = event.requestContext.authorizer.principalId;
+        if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
+    } else {
+        // The user is requesting another users data
+
+        // Check whether their authorised to access this
+
+        // Currently not authorised
+        return buildResponse(401, 'You are not authorised to access this users data')
+    }
+
+    // Build the request
+    const dbRequest = {
+        TableName: USER_TABLE,
+        Key: { 'userId': userID }
+    };
+
+    try {
+        // Query the DB
+        const response = await ddbClient.send(new GetCommand(dbRequest));
+
+        // Prepare the data
+        const tenancies = response.Item.tenancies;
+        for (let i = 0; i < tenancies.length; i++) { delete tenancies[i]["organisations"]; }
+
+        return buildResponse(200, tenancies);
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to get users tenancies');
+    }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -169,7 +273,9 @@ function buildResponse(statusCode, body) {
     return {
         statusCode: statusCode,
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": true // Required for cookies, authorization headers with HTTPS
         },
         body: JSON.stringify(body)
     }

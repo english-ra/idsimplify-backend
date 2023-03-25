@@ -48,11 +48,11 @@ const createTenancy = async (requestBody, requestContext) => {
     if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
 
     // Generate a PK
-    const id = crypto.randomUUID().toString();
+    const tenancyId = crypto.randomUUID().toString();
 
     // Build the item
     const tenancyData = {
-        tenancyId: id,
+        tenancyId: tenancyId,
         name: requestBody.name,
         creationDetails: {
             createdBy: userID
@@ -65,7 +65,7 @@ const createTenancy = async (requestBody, requestContext) => {
         Item: tenancyData,
         ConditionExpression: "tenancyId <> :tenancyIdValue",
         ExpressionAttributeValues: {
-            ":tenancyIdValue": id
+            ":tenancyIdValue": tenancyId
         }
     };
 
