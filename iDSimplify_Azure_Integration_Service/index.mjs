@@ -1,3 +1,5 @@
+import { getAzureAccessToken } from './AzureUtility.mjs';
+
 export const handler = async (event) => {
     let response;
 
@@ -22,38 +24,9 @@ const getUsers = async (requestBody, requestContext) => {
     const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
     const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
 
-    // Get the access token for the Graph API
-    var azureAccessToken = undefined;
-
-    try {
-        var myHeaders = new Headers();
-        myHeaders.append("Content-Type", "application/x-www-form-urlencoded");
-
-        var urlencoded = new URLSearchParams();
-        urlencoded.append("grant_type", "client_credentials");
-        urlencoded.append("client_id", clientID);
-        urlencoded.append("client_secret", clientSecret);
-        urlencoded.append("scope", "https://graph.microsoft.com/.default");
-
-        var requestOptions = {
-            method: 'POST',
-            headers: myHeaders,
-            body: urlencoded
-        };
-
-        const response = await fetch(`https://login.microsoftonline.com/${tenantID}/oauth2/v2.0/token`, requestOptions);
-        const responseData = await response.json();
-
-        azureAccessToken = responseData.access_token;
-    }
-    catch (e) {
-        console.log(e)
-    }
-
-    // Confirm the access token is valid
-    if (azureAccessToken === undefined) { return buildResponse(401, 'Unable to authenticate with Azure'); }
-
-    console.log(azureAccessToken)
+    // Get the access token for the Graph API and confirm it's valid
+    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the users from Azure
     var userData = null;
