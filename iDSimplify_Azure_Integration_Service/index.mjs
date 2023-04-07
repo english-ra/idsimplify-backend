@@ -16,6 +16,12 @@ export const handler = async (event) => {
         case event.httpMethod === 'POST' && event.resource === '/integrations/users/{id}/resetpassword':
             response = resetPassword(event);
             break;
+        case event.httpMethod === 'PATCH' && event.resource === '/integrations/users/{id}/enable':
+            response = enableUser(event);
+            break;
+        case event.httpMethod === 'PATCH' && event.resource === '/integrations/users/{id}/disable':
+            response = disableUser(event);
+            break;
         default:
             response = buildResponse(404, '404 Not Found');
     }
@@ -89,7 +95,9 @@ const getUser = async (event) => {
             headers: myHeaders
         };
 
-        const response = await fetch(`https://graph.microsoft.com/v1.0/users/${queriedUserID}`, requestOptions);
+        const fields = '$select=aboutMe,accountEnabled,displayName,givenName,id,jobTitle,mail,preferredName,surname,userPrincipalName';
+
+        const response = await fetch(`https://graph.microsoft.com/v1.0/users/${queriedUserID}?${fields}`, requestOptions);
 
         userData = await response.json();
     }
@@ -183,7 +191,105 @@ const resetPassword = async (event) => {
 };
 
 
+const enableUser = async (event) => {
 
+    // TODO: Confirm that the requesting user is authorised to perform this action
+
+    // Get the id of the user being queried
+    const pathParameters = event.pathParameters;
+    const queriedUserID = pathParameters.id;
+
+    // Get the relevant integration details
+    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
+    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
+    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+
+    // Get the access token for the Graph API and confirm it's valid
+    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
+
+    // Query the Azure Graph API
+    try {
+        var headers = new Headers();
+        headers.append("Authorization", `Bearer ${azureAccessToken}`);
+        headers.append("Content-Type", "application/json");
+
+        const body = JSON.stringify({
+            accountEnabled: true
+        });
+
+        console.log(body);
+
+        var requestOptions = {
+            method: 'PATCH',
+            body: body,
+            headers: headers
+        };
+
+        const response = await fetch(`https://graph.microsoft.com/v1.0/users/${queriedUserID}`, requestOptions);
+
+        // Check the request was successful
+        if (response.status === 204) { return buildResponse(200, 'Successful, this can take a while to update.') }
+        else { return buildResponse(400, 'Azure Error!') };
+    }
+    catch (e) {
+        console.log(e);
+        return buildResponse(400, 'Failed to query Azure');
+    }
+};
+
+
+const disableUser = async (event) => {
+
+    // TODO: Confirm that the requesting user is authorised to perform this action
+
+    // Get the id of the user being queried
+    const pathParameters = event.pathParameters;
+    const queriedUserID = pathParameters.id;
+
+    // Get the relevant integration details
+    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
+    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
+    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+
+    // Get the access token for the Graph API and confirm it's valid
+    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
+
+    // Query the Azure Graph API
+    try {
+        var headers = new Headers();
+        headers.append("Authorization", `Bearer ${azureAccessToken}`);
+        headers.append("Content-Type", "application/json");
+
+        const body = JSON.stringify({
+            accountEnabled: false
+        });
+
+        console.log(body);
+
+        var requestOptions = {
+            method: 'PATCH',
+            body: body,
+            headers: headers
+        };
+
+        const response = await fetch(`https://graph.microsoft.com/v1.0/users/${queriedUserID}`, requestOptions);
+
+        // Check the request was successful
+        if (response.status === 204) { return buildResponse(200, 'Successful, this can take a while to update.') }
+        else { return buildResponse(400, 'Azure Error!') };
+    }
+    catch (e) {
+        console.log(e);
+        return buildResponse(400, 'Failed to query Azure');
+    }
+};
+
+
+const createUser = (event) => {
+
+};
 
 
 
