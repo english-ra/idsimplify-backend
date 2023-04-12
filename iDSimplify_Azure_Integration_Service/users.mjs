@@ -1,5 +1,7 @@
 import { getAzureAccessToken } from './AzureUtility.mjs';
 import { buildResponse } from './Utility.mjs';
+import { validateJSONWSchema } from './JSONValidator.mjs';
+import schemas from "./schemas.mjs";
 
 export const getUsers = async (requestBody, requestContext) => {
 
@@ -35,6 +37,65 @@ export const getUsers = async (requestBody, requestContext) => {
     }
 
     return buildResponse(200, userData);
+};
+
+
+export const createUser = async (event) => {
+
+    // TODO: Confirm that the user is authorised for this
+
+    // Get the user for creations data
+    const creationUserData = JSON.parse(event.body);
+
+    // Validate the request data
+    // const isDataValid = validateJSONWSchema(creationUserData, schemas['creationUser']);
+    // if (!isDataValid) { return buildResponse(400, 'Incorrect data'); }
+
+    // Get the relevant integration details
+    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
+    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
+    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+
+    // Get the access token for the Graph API and confirm it's valid
+    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
+
+    // Query the Azure Graph API
+    var responseData = null;
+    try {
+        var headers = new Headers();
+        headers.append("Content-Type", "application/json");
+        headers.append("Authorization", `Bearer ${azureAccessToken}`);
+
+        var body = JSON.stringify({
+            "accountEnabled": true,
+            "givenName": creationUserData.givenName,
+            "surname": creationUserData.surname,
+            "displayName": creationUserData.displayName,
+            "mailNickname": creationUserData.mailNickname,
+            "userPrincipalName": creationUserData.userPrincipalName,
+            "passwordProfile": {
+                "forceChangePasswordNextSignIn": true,
+                "password": creationUserData.password
+            }
+        });
+
+        var requestOptions = {
+            method: 'POST',
+            headers: headers,
+            body: body
+        };
+
+        const response = await fetch(`https://graph.microsoft.com/v1.0/users`, requestOptions);
+
+        // Check the request was successful
+        if (response.status === 201) { return buildResponse(200, 'Successful, this can take a while to update.') }
+        else { return buildResponse(400, 'Azure Error!') };
+    }
+    catch (e) {
+        console.log(e);
+        return buildResponse(400, 'Failed to query Azure');
+    }
 };
 
 
@@ -251,9 +312,4 @@ export const disableUser = async (event) => {
         console.log(e);
         return buildResponse(400, 'Failed to query Azure');
     }
-};
-
-
-export const createUser = (event) => {
-
 };

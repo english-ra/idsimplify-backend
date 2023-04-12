@@ -1,3 +1,4 @@
+import { getDomains } from './misc.mjs';
 import {
     getUsers,
     getUser,
@@ -16,6 +17,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'GET' && event.resource === '/integrations/users':
             response = getUsers(event);
             break;
+        case event.httpMethod === 'POST' && event.resource === '/integrations/users':
+            response = createUser(event);
+            break;
         case event.httpMethod === 'GET' && event.resource === '/integrations/users/{id}':
             response = getUser(event);
             break;
@@ -31,8 +35,8 @@ export const handler = async (event) => {
         case event.httpMethod === 'PATCH' && event.resource === '/integrations/users/{id}/disable':
             response = disableUser(event);
             break;
-        case event.httpMethod === '' && event.resource === '':
-            response = createUser(event);
+        case event.httpMethod === 'GET' && event.resource === '/integrations/domains':
+            response = getDomains(event);
             break;
         default:
             response = buildResponse(404, '404 Not Found');
