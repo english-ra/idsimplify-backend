@@ -8,8 +8,6 @@ const ddbClient = new DynamoDBClient({ region: 'eu-west-2' });
 export const handler = async (event) => {
     let response;
 
-    console.log(event);
-
     switch (true) {
         case event.httpMethod === 'POST' && event.path === '/users':
             response = createUser(event);
@@ -103,7 +101,7 @@ const getUsersTenancies = async (event) => {
     // Build the request
     const dbRequest = {
         TableName: process.env.USER_TABLE,
-        Key: { 'userId': userID }
+        Key: { 'id': userID }
     };
 
     try {
@@ -111,10 +109,18 @@ const getUsersTenancies = async (event) => {
         const response = await ddbClient.send(new GetCommand(dbRequest));
 
         // Prepare the data
-        const tenancies = response.Item.tenancies;
-        for (let i = 0; i < tenancies.length; i++) { delete tenancies[i]["organisations"]; }
+        const responseData = [];
 
-        return buildResponse(200, tenancies);
+        const tenancies = response.Item.tenancies;
+        for (let i = 0; i < tenancies.length; i++) {
+            responseData.push({
+                id: tenancies[i].id,
+                name: tenancies[i].name,
+                permissions: tenancies[i].permissions
+            });
+        }
+
+        return buildResponse(200, responseData);
     }
     catch (err) {
         // An error occurred in saving to the DB
