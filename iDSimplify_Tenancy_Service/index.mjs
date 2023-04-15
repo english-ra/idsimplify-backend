@@ -21,6 +21,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations':
             response = createOrganisation(event);
             break;
+        case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations':
+            response = getOrganisations(event);
+            break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
     }
@@ -147,8 +150,6 @@ const createOrganisation = async (event) => {
     const requestingUserID = event.requestContext.authorizer.principalId;
     if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
 
-    console.log(event.pathParameters['tenancy-id']);
-
     // Get the tenancy
     const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
     console.log(tenancy);
@@ -189,6 +190,35 @@ const createOrganisation = async (event) => {
         // Send back response
         return buildResponse(500, 'Unable to create organisation');
     }
+};
+
+
+const getOrganisations = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    console.log(tenancy.organisations);
+
+    // Extract the organisations from the tenancy
+    var organisations = [];
+    for (var i = 0; i < tenancy.organisations.length; i++) {
+        organisations.push({
+            id: tenancy.organisations[i].id,
+            name: tenancy.organisations[i].name
+        });
+    }
+
+    return buildResponse(200, organisations);
 };
 
 
