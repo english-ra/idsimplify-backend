@@ -15,10 +15,11 @@ export const handler = async (event) => {
     let response;
 
     switch (true) {
-        case event.httpMethod === 'POST' && event.path === '/tenancies':
+        case event.httpMethod === 'POST' && event.resource === '/tenancies':
             response = createTenancy(event);
             break;
-        case event.httpMethod === 'POST' && event.path === '/tenancies/{id}/organisations':
+        case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations':
+            response = createOrganisation(event);
             break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
@@ -73,7 +74,7 @@ const createTenancy = async (event) => {
         organisations: [],
         users: [
             {
-                userId: requestingUserID,
+                id: requestingUserID,
                 tenancyPermissions: ['iD-P-1'],
                 organisationPermissions: []
             }
@@ -81,10 +82,9 @@ const createTenancy = async (event) => {
     };
 
     const tenancyForUser = {
-        id: crypto.randomUUID().toString(),
-        name: requestBody.name,
-        permissions: ['iD-P-1'],
-        organisations: []
+        id: tenancy.id,
+        name: tenancy.name,
+        permissions: ['iD-P-1']
     };
 
     const updatedUser = { ...userData };
@@ -112,8 +112,8 @@ const createTenancy = async (event) => {
 
         const response = await db.send(new BatchWriteCommand({
             RequestItems: {
-                [process.env.TENANCY_DB]: [ { PutRequest: { ...tenancyDbRequest } } ],
-                [process.env.USER_DB]: [ { PutRequest: { ...userDbRequest } } ]
+                [process.env.TENANCY_DB]: [{ PutRequest: { ...tenancyDbRequest } }],
+                [process.env.USER_DB]: [{ PutRequest: { ...userDbRequest } }]
             }
         }));
 
@@ -137,6 +137,80 @@ const createTenancy = async (event) => {
 };
 
 
+const createOrganisation = async (event) => {
+
+    const requestBody = JSON.parse(event.body);
+
+    // Validate the request data
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    console.log(event.pathParameters['tenancy-id']);
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    console.log(tenancy);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Create the organisation object
+    const organisation = {
+        id: crypto.randomUUID().toString(),
+        name: requestBody.name,
+        integrations: []
+    };
+
+    // Update the tenancy object with the organisation
+    const updatedTenancy = { ...tenancy };
+    updatedTenancy.organisations.push(organisation);
+
+    // Build the DB request
+    const dbRequest = {
+        TableName: process.env.TENANCY_DB,
+        Item: updatedTenancy
+    };
+
+    try {
+        // Save data to the DB
+        const response = await db.send(new PutCommand(dbRequest));
+
+        // Send back response
+        return buildResponse(200, 'Organisation created successfully');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to create organisation');
+    }
+};
+
+
+
+
+
+
+
+const UTIL_getTenancy = async (tenancyID) => {
+    try {
+        // Query the DB
+        const response = await db.send(new GetCommand({ TableName: process.env.TENANCY_DB, Key: { 'id': tenancyID } }));
+        return response.Item;
+    }
+    catch (err) {
+        // An error occurred whilst querying the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return null;
+    }
+};
 
 
 
