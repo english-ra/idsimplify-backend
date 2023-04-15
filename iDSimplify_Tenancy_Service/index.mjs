@@ -1,6 +1,6 @@
 // Package imports
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
 import crypto from 'crypto';
 
 // Module imports
@@ -46,6 +46,21 @@ const createTenancy = async (event) => {
     const requestingUserID = requestContext.authorizer.principalId;
     if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
 
+    // Get the users data
+    var userData;
+    try {
+        // Query the DB
+        const response = await db.send(new GetCommand({ TableName: process.env.USER_DB, Key: { 'id': requestingUserID } }));
+        userData = response.Item;
+    }
+    catch (err) {
+        // An error occurred whilst querying the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to get the users data');
+    }
+
     // Build the item
     const currentDate = Date.now().toString();
 
@@ -65,9 +80,19 @@ const createTenancy = async (event) => {
         ]
     };
 
+    const tenancyForUser = {
+        id: crypto.randomUUID().toString(),
+        name: requestBody.name,
+        permissions: ['iD-P-1'],
+        organisations: []
+    };
+
+    const updatedUser = { ...userData };
+    updatedUser.tenancies.push(tenancyForUser);
+
     // Build the DB request
-    const dbRequest = {
-        TableName: process.env.TENANCY_DB,
+    const tenancyDbRequest = {
+        // TableName: process.env.TENANCY_DB,
         Item: tenancy,
         ConditionExpression: "id <> :idValue",
         ExpressionAttributeValues: {
@@ -75,10 +100,22 @@ const createTenancy = async (event) => {
         }
     };
 
+    const userDbRequest = {
+        // TableName: process.env.USER_DB,
+        Item: updatedUser
+    }
+
     // Query the DB
     try {
         // Save data to the DB
-        const response = await db.send(new PutCommand(dbRequest));
+        // const response = await db.send(new PutCommand(dbRequest));
+
+        const response = await db.send(new BatchWriteCommand({
+            RequestItems: {
+                [process.env.TENANCY_DB]: [ { PutRequest: { ...tenancyDbRequest } } ],
+                [process.env.USER_DB]: [ { PutRequest: { ...userDbRequest } } ]
+            }
+        }));
 
         // Successful save - Build the response
         const responseBody = {
