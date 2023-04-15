@@ -3,10 +3,6 @@ const schemas = {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
         "properties": {
-            "tenancyId": {
-                "description": "The PK of the tenancy",
-                "type": "string"
-            },
             "name": {
                 "title": "Tenancy name",
                 "description": "The name of the tenancy",
@@ -17,7 +13,6 @@ const schemas = {
         },
         "additionalProperties": false,
         "required": [
-            // "tenancyId",
             "name"
         ]
     }

@@ -7,20 +7,18 @@ import crypto from 'crypto';
 import { validateJSONWSchema } from './JSONValidator.mjs';
 import schemas from "./schemas.mjs";
 
-// Environment variables
-const TENANCY_TABLE = process.env.TENANCY_DB_TABLE;
-const REGION = process.env.REGION;
 
-
-const db = new DynamoDBClient({ region: REGION });
+const db = new DynamoDBClient({ region: process.env.REGION });
 
 // Lambda handler function
 export const handler = async (event) => {
     let response;
 
     switch (true) {
-        case event.httpMethod === 'POST' && event.path === '/tenancy':
-            response = createTenancy(JSON.parse(event.body), event.requestContext);
+        case event.httpMethod === 'POST' && event.path === '/tenancies':
+            response = createTenancy(event);
+            break;
+        case event.httpMethod === 'POST' && event.path === '/tenancies/{id}/organisations':
             break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
@@ -35,49 +33,58 @@ export const handler = async (event) => {
 
 
 
-const createTenancy = async (requestBody, requestContext) => {
+const createTenancy = async (event) => {
+
+    const requestBody = JSON.parse(event.body);
+    const requestContext = event.requestContext;
 
     // Validate that the data is formatted correctly
     const isDataValid = validateJSONWSchema(requestBody, schemas['tenancy']);
     if (!isDataValid) { return buildResponse(400, 'Incorrect Data'); }
 
-    console.log(requestContext);
-
-    // Get the users ID and validate
-    const userID = requestContext.authorizer.principalId;
-    if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
-
-    // Generate a PK
-    const tenancyId = crypto.randomUUID().toString();
+    // Get the requesting users ID
+    const requestingUserID = requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
 
     // Build the item
-    const tenancyData = {
-        tenancyId: tenancyId,
+    const currentDate = Date.now().toString();
+
+    const tenancy = {
+        id: crypto.randomUUID().toString(),
         name: requestBody.name,
-        creationDetails: {
-            createdBy: userID
-        }
+        created: currentDate,
+        lastModified: currentDate,
+        createdById: requestingUserID,
+        organisations: [],
+        users: [
+            {
+                userId: requestingUserID,
+                tenancyPermissions: ['iD-P-1'],
+                organisationPermissions: []
+            }
+        ]
     };
 
     // Build the DB request
-    const dbParams = {
-        TableName: TENANCY_TABLE,
-        Item: tenancyData,
-        ConditionExpression: "tenancyId <> :tenancyIdValue",
+    const dbRequest = {
+        TableName: process.env.TENANCY_DB,
+        Item: tenancy,
+        ConditionExpression: "id <> :idValue",
         ExpressionAttributeValues: {
-            ":tenancyIdValue": tenancyId
+            ":idValue": tenancy.id
         }
     };
 
+    // Query the DB
     try {
         // Save data to the DB
-        const data = await db.send(new PutCommand(dbParams));
+        const response = await db.send(new PutCommand(dbRequest));
 
         // Successful save - Build the response
         const responseBody = {
             Operation: 'SAVE',
             Message: 'Tenancy created successfully',
-            Item: tenancyData
+            Item: response
         };
 
         // Send back response
