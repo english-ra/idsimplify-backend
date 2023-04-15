@@ -5,10 +5,6 @@ import schemas from './schemas.mjs';
 
 const ddbClient = new DynamoDBClient({ region: 'eu-west-2' });
 
-// Environment variables
-const USER_TABLE = process.env.USER_TABLE;
-const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
-
 export const handler = async (event) => {
     let response;
 
@@ -16,7 +12,7 @@ export const handler = async (event) => {
 
     switch (true) {
         case event.httpMethod === 'POST' && event.path === '/users':
-            response = createUser(JSON.parse(event.body), event.requestContext);
+            response = createUser(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies':
             response = getUsersTenancies(event);
@@ -29,41 +25,46 @@ export const handler = async (event) => {
 };
 
 
-const createUser = async (requestBody, requestContext) => {
+const createUser = async (event) => {
+
+    const requestBody = JSON.parse(event.body);
+    const requestContext = event.requestContext;
 
     // Ensure this request is only coming from Auth0
     const clientID = requestContext.authorizer.principalId;
-    if (clientID != `${AUTH0_CLIENT_ID}@clients`) { return buildResponse(401, 'Not Auth0'); }
+    if (clientID != `${process.env.AUTH0_CLIENT_ID}@clients`) { return buildResponse(401, 'Not Auth0'); }
 
     // Validate that the data is formatted correctly
     const isDataValid = validateJSONWScheme(requestBody, schemas['user']);
     if (!isDataValid) { return buildResponse(400, 'Incorrect Data'); }
 
     // Build the item
-    const userItem = {
-        userId: requestBody.userId,
-        createdAt: requestBody.createdAt
+    const user = {
+        id: requestBody.userId,
+        created: requestBody.createdAt,
+        lastModified: requestBody.createdAt,
+        tenancies: []
     };
 
     // Build the DB request
     const dbRequest = {
-        TableName: USER_TABLE,
-        Item: userItem,
-        ConditionExpression: "userId <> :userIdValue",
+        TableName: process.env.USER_TABLE,
+        Item: user,
+        ConditionExpression: "id <> :idValue",
         ExpressionAttributeValues: {
-            ":userIdValue": requestBody.userId
+            ":idValue": user.id
         }
     };
 
     try {
         // Save data to the DB
-        const data = await ddbClient.send(new PutCommand(dbRequest));
+        const response = await ddbClient.send(new PutCommand(dbRequest));
 
         // Successful save - Build the response
         const responseBody = {
             Operation: 'SAVE',
             Message: 'User created successfully',
-            Item: userItem
+            Item: response
         };
 
         // Send back response
@@ -101,7 +102,7 @@ const getUsersTenancies = async (event) => {
 
     // Build the request
     const dbRequest = {
-        TableName: USER_TABLE,
+        TableName: process.env.USER_TABLE,
         Key: { 'userId': userID }
     };
 
