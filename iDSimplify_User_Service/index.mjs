@@ -44,7 +44,7 @@ const createUser = async (event) => {
         id: requestBody.userId,
         created: requestBody.createdAt,
         lastModified: requestBody.createdAt,
-        tenancies: []
+        tenancies: {}
     };
 
     // Build the DB request
