@@ -149,30 +149,33 @@ const createOrganisation = async (event) => {
     if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
 
     // Get the tenancy
-    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
-    console.log(tenancy);
+    const tenancyID = event.pathParameters['tenancy-id'];
+    const tenancy = await UTIL_getTenancy(tenancyID);
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Create the organisation object
+    const organisationID = crypto.randomUUID().toString();
     const organisation = {
-        id: crypto.randomUUID().toString(),
         name: requestBody.name,
-        integrations: []
+        integrations: {}
     };
 
     // Create the update request
     const dbRequest = {
         TableName: process.env.TENANCY_DB,
         Key: {
-            'id': tenancy.id
+            'id': tenancyID
         },
-        UpdateExpression: `set organisations = list_append(organisations, :value)`,
+        UpdateExpression: `SET organisations.#organisationID = :organisation`,
+        ExpressionAttributeNames: {
+            '#organisationID': organisationID
+        },
         ExpressionAttributeValues: {
-            ':value': [organisation]
+            ':organisation': organisation
         },
         ReturnValues: 'UPDATED_NEW'
     }
@@ -205,15 +208,18 @@ const getOrganisations = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    const rawOrganisations = tenancy.organisations;
+    const organisationIDs = Object.keys(rawOrganisations);
 
     // Extract the organisations from the tenancy
     var organisations = [];
-    for (var i = 0; i < tenancy.organisations.length; i++) {
+    for (var i = 0; i < organisationIDs.length; i++) {
         organisations.push({
-            id: tenancy.organisations[i].id,
-            name: tenancy.organisations[i].name
+            id: organisationIDs[i],
+            name: tenancy.organisations[organisationIDs[i]].name
         });
     }
 
@@ -232,19 +238,19 @@ const getOrganisation = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Extract the organisation from the tenancy
     const organisationID = event.pathParameters['organisation-id'];
-    const organisation = tenancy.organisations.find((organisation) => { return organisation.id === organisationID });
+    const organisation = tenancy.organisations[organisationID];
 
     // Ensure the organisation exists
     if (organisation === null || organisation === undefined) { return buildResponse(500, 'Organisation does not exist') }
 
     // Create the response
     const response = {
-        id: organisation.id,
+        id: organisationID,
         name: organisation.name
     };
 
