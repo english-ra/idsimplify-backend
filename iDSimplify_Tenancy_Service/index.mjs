@@ -170,12 +170,15 @@ const createOrganisation = async (event) => {
         Key: {
             'id': tenancyID
         },
-        UpdateExpression: `SET organisations.#organisationID = :organisation`,
+        UpdateExpression: 'SET organisations.#organisationID = :organisation, #users.#userID.organisationPermissions = :organisationPermission',
         ExpressionAttributeNames: {
-            '#organisationID': organisationID
+            '#users': 'users',
+            '#organisationID': organisationID,
+            '#userID': requestingUserID
         },
         ExpressionAttributeValues: {
-            ':organisation': organisation
+            ':organisation': organisation,
+            ':organisationPermission': { [organisationID]: ['iD-P-10000'] }
         },
         ReturnValues: 'UPDATED_NEW'
     }

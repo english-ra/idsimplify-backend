@@ -147,14 +147,24 @@ const getUsersTenacyOrganisations = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Get the user from the tenancy and validate
-    const user = tenancy.users.find((user) => { return user.id === requestingUserID });
+    const user = tenancy.users[requestingUserID];
     if (user === null || user === undefined) {return buildResponse(403, 'User is not a member of this tenancy')};
+
+    const rawOrganisations = user.organisationPermissions;
+    const organisationIDs = Object.keys(rawOrganisations);
 
     // Get the users organisations
     const organisations = [];
-    for (var i = 0; i < user.organisationPermissions.length; i++) {
-        const organisation = tenancy.organisations.find((organisation) => { return organisation.id === user.organisationPermissions[i].id }) || null;
-        organisations.push(organisation);
+    for (var i = 0; i < organisationIDs.length; i++) {
+        const organisation = tenancy.organisations[organisationIDs[i]] || null;
+
+        // Validate the organisation
+        if (organisation === null || organisation === undefined) { break }
+
+        organisations.push({
+            id: organisationIDs[i],
+            name: organisation.name
+        });
     };
 
     return buildResponse(200, organisations);
