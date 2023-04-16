@@ -3,7 +3,7 @@ import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import validateJSONWScheme from './JSONValidator.mjs';
 import schemas from './schemas.mjs';
 
-const ddbClient = new DynamoDBClient({ region: 'eu-west-2' });
+const db = new DynamoDBClient({ region: 'eu-west-2' });
 
 export const handler = async (event) => {
     let response;
@@ -14,6 +14,9 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies':
             response = getUsersTenancies(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies/{tenancy-id}/organisations':
+            response = getUsersTenacyOrganisations(event);
             break;
         default:
             response = buildResponse(404, '404 Not Found');
@@ -56,7 +59,7 @@ const createUser = async (event) => {
 
     try {
         // Save data to the DB
-        const response = await ddbClient.send(new PutCommand(dbRequest));
+        const response = await db.send(new PutCommand(dbRequest));
 
         // Successful save - Build the response
         const responseBody = {
@@ -106,7 +109,7 @@ const getUsersTenancies = async (event) => {
 
     try {
         // Query the DB
-        const response = await ddbClient.send(new GetCommand(dbRequest));
+        const response = await db.send(new GetCommand(dbRequest));
 
         // Prepare the data
         const responseData = [];
@@ -129,6 +132,31 @@ const getUsersTenancies = async (event) => {
         // Send back response
         return buildResponse(500, 'Unable to get users tenancies');
     }
+};
+
+
+const getUsersTenacyOrganisations = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Get the user from the tenancy and validate
+    const user = tenancy.users.find((user) => { return user.id === requestingUserID });
+    if (user === null || user === undefined) {return buildResponse(403, 'User is not a member of this tenancy')};
+
+    // Get the users organisations
+    const organisations = [];
+    for (var i = 0; i < user.organisationPermissions.length; i++) {
+        const organisation = tenancy.organisations.find((organisation) => { return organisation.id === user.organisationPermissions[i].id }) || null;
+        organisations.push(organisation);
+    };
+
+    return buildResponse(200, organisations);
 };
 
 
@@ -190,91 +218,103 @@ const getUsersTenancies = async (event) => {
 
 
 
+// async function getProduct(productId) {
+//     const params = {
+//         TableName: dynamodbTableName,
+//         Key: {
+//             'productId': productId
+//         }
+//     }
+//     return await dynamodb.get(params).promise().then((response) => {
+//         return buildResponse(200, response.Item);
+//     }, (error) => {
+//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
+//     });
+// }
 
+// async function getProducts() {
+//     const params = {
+//         TableName: dynamodbTableName
+//     }
+//     const allProducts = await scanDynamoRecords(params, []);
+//     const body = {
+//         products: allProducts
+//     }
+//     return buildResponse(200, body);
+// }
 
+// async function scanDynamoRecords(scanParams, itemArray) {
+//     try {
+//         const dynamoData = await dynamodb.scan(scanParams).promise();
+//         itemArray = itemArray.concat(dynamoData.Items);
+//         if (dynamoData.LastEvaluatedKey) {
+//             scanParams.ExclusiveStartkey = dynamoData.LastEvaluatedKey;
+//             return await scanDynamoRecords(scanParams, itemArray);
+//         }
+//         return itemArray;
+//     } catch (error) {
+//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
+//     }
+// }
 
-async function getProduct(productId) {
-    const params = {
-        TableName: dynamodbTableName,
-        Key: {
-            'productId': productId
-        }
-    }
-    return await dynamodb.get(params).promise().then((response) => {
-        return buildResponse(200, response.Item);
-    }, (error) => {
-        console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    });
-}
+// async function modifyProduct(productId, updateKey, updateValue) {
+//     const params = {
+//         TableName: dynamodbTableName,
+//         Key: {
+//             'productId': productId
+//         },
+//         UpdateExpression: `set ${updateKey} = :value`,
+//         ExpressionAttributeValues: {
+//             ':value': updateValue
+//         },
+//         ReturnValues: 'UPDATED_NEW'
+//     }
+//     return await dynamodb.update(params).promise().then((response) => {
+//         const body = {
+//             Operation: 'UPDATE',
+//             Message: 'SUCCESS',
+//             UpdatedAttributes: response
+//         }
+//         return buildResponse(200, body);
+//     }, (error) => {
+//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
+//     })
+// }
 
-async function getProducts() {
-    const params = {
-        TableName: dynamodbTableName
-    }
-    const allProducts = await scanDynamoRecords(params, []);
-    const body = {
-        products: allProducts
-    }
-    return buildResponse(200, body);
-}
+// async function deleteProduct(productId) {
+//     const params = {
+//         TableName: dynamodbTableName,
+//         Key: {
+//             'productId': productId
+//         },
+//         ReturnValues: 'ALL_OLD'
+//     }
+//     return await dynamodb.delete(params).promise().then((response) => {
+//         const body = {
+//             Operation: 'DELETE',
+//             Message: 'SUCCESS',
+//             Item: response
+//         }
+//         return buildResponse(200, body);
+//     }, (error) => {
+//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
+//     })
+// }
 
-async function scanDynamoRecords(scanParams, itemArray) {
+const UTIL_getTenancy = async (tenancyID) => {
     try {
-        const dynamoData = await dynamodb.scan(scanParams).promise();
-        itemArray = itemArray.concat(dynamoData.Items);
-        if (dynamoData.LastEvaluatedKey) {
-            scanParams.ExclusiveStartkey = dynamoData.LastEvaluatedKey;
-            return await scanDynamoRecords(scanParams, itemArray);
-        }
-        return itemArray;
-    } catch (error) {
-        console.error('Do your custom error handling here. I am just gonna log it: ', error);
+        // Query the DB
+        const response = await db.send(new GetCommand({ TableName: process.env.TENANCY_DB, Key: { 'id': tenancyID } }));
+        return response.Item;
     }
-}
+    catch (err) {
+        // An error occurred whilst querying the DB
+        console.log('Error', err.stack);
 
-async function modifyProduct(productId, updateKey, updateValue) {
-    const params = {
-        TableName: dynamodbTableName,
-        Key: {
-            'productId': productId
-        },
-        UpdateExpression: `set ${updateKey} = :value`,
-        ExpressionAttributeValues: {
-            ':value': updateValue
-        },
-        ReturnValues: 'UPDATED_NEW'
+        // Send back response
+        return null;
     }
-    return await dynamodb.update(params).promise().then((response) => {
-        const body = {
-            Operation: 'UPDATE',
-            Message: 'SUCCESS',
-            UpdatedAttributes: response
-        }
-        return buildResponse(200, body);
-    }, (error) => {
-        console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    })
-}
-
-async function deleteProduct(productId) {
-    const params = {
-        TableName: dynamodbTableName,
-        Key: {
-            'productId': productId
-        },
-        ReturnValues: 'ALL_OLD'
-    }
-    return await dynamodb.delete(params).promise().then((response) => {
-        const body = {
-            Operation: 'DELETE',
-            Message: 'SUCCESS',
-            Item: response
-        }
-        return buildResponse(200, body);
-    }, (error) => {
-        console.error('Do your custom error handling here. I am just gonna log it: ', error);
-    })
-}
+};
 
 function buildResponse(statusCode, body) {
     return {
