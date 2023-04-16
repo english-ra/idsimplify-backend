@@ -115,11 +115,12 @@ const getUsersTenancies = async (event) => {
         const responseData = [];
 
         const tenancies = response.Item.tenancies;
-        for (let i = 0; i < tenancies.length; i++) {
+        const tenancyIDs = Object.keys(tenancies);
+        for (let i = 0; i < tenancyIDs.length; i++) {
             responseData.push({
-                id: tenancies[i].id,
-                name: tenancies[i].name,
-                permissions: tenancies[i].permissions
+                id: tenancyIDs[i],
+                name: tenancies[tenancyIDs[i]].name,
+                permissions: tenancies[tenancyIDs[i]].permissions
             });
         }
 
