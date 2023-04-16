@@ -269,23 +269,26 @@ const getOrganisationIntegrations = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Extract the organisation from the tenancy
     const organisationID = event.pathParameters['organisation-id'];
-    const organisation = tenancy.organisations.find((organisation) => { return organisation.id === organisationID });
+    const organisation = tenancy.organisations[organisationID];
 
     // Ensure the organisation exists
     if (organisation === null || organisation === undefined) { return buildResponse(500, 'Organisation does not exist') }
 
+    const rawIntegrations = organisation.integrations;
+    const integrationIDs = Object.keys(rawIntegrations);
+
     // Create the response
     const integrations = [];
-    for (var i = 0; i < organisation.integrations.length; i++) {
+    for (var i = 0; i < integrationIDs.length; i++) {
         integrations.push({
-            id: organisation.integrations[i].id,
-            name: organisation.integrations[i].name,
-            type: organisation.integrations[i].type
+            id: integrationIDs[i],
+            name: rawIntegrations[integrationIDs[i]].name,
+            type: rawIntegrations[integrationIDs[i]].type
         });
     };
 
