@@ -24,6 +24,12 @@ export const handler = async (event) => {
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations':
             response = getOrganisations(event);
             break;
+        case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}':
+            response = getOrganisation(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/integrations':
+            response = getOrganisationIntegrations(event);
+            break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
     }
@@ -207,8 +213,6 @@ const getOrganisations = async (event) => {
     const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
 
-    console.log(tenancy.organisations);
-
     // Extract the organisations from the tenancy
     var organisations = [];
     for (var i = 0; i < tenancy.organisations.length; i++) {
@@ -219,6 +223,72 @@ const getOrganisations = async (event) => {
     }
 
     return buildResponse(200, organisations);
+};
+
+
+const getOrganisation = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Extract the organisation from the tenancy
+    const organisationID = event.pathParameters['organisation-id'];
+    const organisation = tenancy.organisations.find((organisation) => { return organisation.id === organisationID });
+
+    // Ensure the organisation exists
+    if (organisation === null || organisation === undefined) { return buildResponse(500, 'Organisation does not exist') }
+
+    // Create the response
+    const response = {
+        id: organisation.id,
+        name: organisation.name
+    };
+
+    return buildResponse(200, response);
+};
+
+
+const getOrganisationIntegrations = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users.find((user) => { return user.id === requestingUserID }).tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Extract the organisation from the tenancy
+    const organisationID = event.pathParameters['organisation-id'];
+    const organisation = tenancy.organisations.find((organisation) => { return organisation.id === organisationID });
+
+    // Ensure the organisation exists
+    if (organisation === null || organisation === undefined) { return buildResponse(500, 'Organisation does not exist') }
+
+    // Create the response
+    const integrations = [];
+    for (var i = 0; i < organisation.integrations.length; i++) {
+        integrations.push({
+            id: organisation.integrations[i].id,
+            name: organisation.integrations[i].name,
+            type: organisation.integrations[i].type
+        });
+    };
+
+    return buildResponse(200, integrations);
 };
 
 
