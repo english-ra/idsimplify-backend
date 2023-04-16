@@ -1,6 +1,6 @@
 // Package imports
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand, GetCommand, BatchWriteCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand, BatchWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import crypto from 'crypto';
 
 // Module imports
@@ -172,19 +172,22 @@ const createOrganisation = async (event) => {
         integrations: []
     };
 
-    // Update the tenancy object with the organisation
-    const updatedTenancy = { ...tenancy };
-    updatedTenancy.organisations.push(organisation);
-
-    // Build the DB request
+    // Create the update request
     const dbRequest = {
         TableName: process.env.TENANCY_DB,
-        Item: updatedTenancy
-    };
+        Key: {
+            'id': tenancy.id
+        },
+        UpdateExpression: `set organisations = list_append(organisations, :value)`,
+        ExpressionAttributeValues: {
+            ':value': [organisation]
+        },
+        ReturnValues: 'UPDATED_NEW'
+    }
 
     try {
         // Save data to the DB
-        const response = await db.send(new PutCommand(dbRequest));
+        const response = await db.send(new UpdateCommand(dbRequest));
 
         // Send back response
         return buildResponse(200, 'Organisation created successfully');
