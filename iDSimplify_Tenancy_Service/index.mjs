@@ -18,6 +18,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'POST' && event.resource === '/tenancies':
             response = createTenancy(event);
             break;
+        case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/users':
+            response = createUserRequest(event);
+            break;
         case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations':
             response = createOrganisation(event);
             break;
@@ -300,6 +303,111 @@ const getOrganisationIntegrations = async (event) => {
 };
 
 
+const createUserRequest = async (event) => {
+
+    const tenancyID = event.pathParameters['tenancy-id'];
+    const requestBody = JSON.parse(event.body);
+
+    // Validate the request data
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Check that the requested user has an account
+    const requestedUser = await UTIL_getUserFromAuth0(requestBody.email);
+    if (requestedUser === null || requestedUser === undefined) { return buildResponse(500, 'User with this email address does not exist'); }
+
+    // Check that the user isn't already added to the tenancy
+    if (tenancy.users[requestedUser.user_id] || null != null) { return buildResponse(500, 'User is already a member of this tenancy') }
+
+    // Check that this user doesn't already have a pending request
+    if (tenancy.userRequests[requestedUser.user_id] || null != null) { return buildResponse(500, 'User already has a pending request'); }
+
+    // Create the request object
+    const request = {
+        sent: Date.now().toString()
+    }
+
+    // Query the DB
+    try {
+        // Save data to the DB
+        const response = await db.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.TENANCY_DB,
+                        Key: {
+                            'id': tenancyID
+                        },
+                        UpdateExpression: `SET userRequests.#userID = :request`,
+                        ExpressionAttributeNames: {
+                            '#userID': requestedUser.user_id
+                        },
+                        ExpressionAttributeValues: {
+                            ':request': request
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                },
+                {
+                    Update: {
+                        TableName: process.env.USER_DB,
+                        Key: {
+                            'id': requestedUser.user_id
+                        },
+                        UpdateExpression: `SET tenancyRequests.#tenancyId = :request`,
+                        ExpressionAttributeNames: {
+                            '#tenancyId': tenancy.id
+                        },
+                        ExpressionAttributeValues: {
+                            ':request': request
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                }
+            ]
+        }));
+
+        // Successful save - Build the response
+        const responseBody = {
+            Operation: 'SAVE',
+            Message: 'Tenancy created successfully',
+            Item: response
+        };
+
+        await UTIL_sendEmail({
+            to: requestedUser.email,
+            subject: `You have been invited to join ${tenancy.name}`,
+            content: [
+                {
+                    "type": "text/plain",
+                    "value": "To respond to this request, please sign in to your account and go to profile."
+                }
+            ]
+        });
+
+        // Send back response
+        return buildResponse(200, 'Request successfully sent');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to create tenancy');
+    }
+};
+
+
 
 
 
@@ -317,6 +425,106 @@ const UTIL_getTenancy = async (tenancyID) => {
 
         // Send back response
         return null;
+    }
+};
+
+
+const UTIL_getAuth0ManagementAPIAccessToken = async () => {
+
+    // Get the access token for the API
+    var accessToken = undefined;
+
+    try {
+        var headers = new Headers();
+        headers.append("Content-Type", "application/json");
+
+        const body = {
+            client_id: process.env.AUTH0_MANAGEMENT_API_CLIENT_ID,
+            client_secret: process.env.AUTH0_MANAGEMENT_API_CLIENT_SECRET,
+            audience: process.env.AUTH0_MANAGEMENT_API_AUDIENCE,
+            grant_type: 'client_credentials'
+        };
+
+        var requestOptions = {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+        };
+
+        const response = await fetch('https://idsimplify.uk.auth0.com/oauth/token', requestOptions);
+
+        const responseData = await response.json();
+        accessToken = responseData.access_token;
+    }
+    catch (error) {
+        console.log(error);
+    }
+
+    return accessToken;
+};
+
+
+const UTIL_getUserFromAuth0 = async (email) => {
+
+    var user = null;
+
+    const searchParams = new URLSearchParams({
+        email: email
+    });
+
+    try {
+
+        const accessToken = await UTIL_getAuth0ManagementAPIAccessToken();
+
+        const response = await fetch(`https://idsimplify.uk.auth0.com/api/v2/users-by-email?${searchParams}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        const responseData = await response.json();
+        user = responseData.find((user) => { return user.email === email }) || null;
+    }
+    catch (error) {
+        console.log(error);
+    }
+    return user;
+};
+
+
+const UTIL_sendEmail = async (email) => {
+    try {
+        var headers = new Headers();
+        headers.append("Content-Type", "application/json");
+        headers.append("Authorization", `Bearer ${process.env.SENDGRID_API_KEY}`);
+
+        const body = {
+            "personalizations": [
+                {
+                    "to": [
+                        {
+                            "email": email.to
+                        }
+                    ]
+                }
+            ],
+            "from": {
+                "email": "donotreply@idsimplify.co.uk"
+            },
+            "subject": email.subject,
+            "content": email.content
+        };
+
+        var requestOptions = {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+        };
+
+        const response = await fetch('https://api.sendgrid.com/v3/mail/send', requestOptions);
+    }
+    catch (error) {
+        console.log(error);
     }
 };
 
