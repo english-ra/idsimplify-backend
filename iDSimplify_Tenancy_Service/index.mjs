@@ -21,6 +21,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/users':
             response = createUserRequest(event);
             break;
+        case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/users':
+            response = getUsers(event);
+            break;
         case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations':
             response = createOrganisation(event);
             break;
@@ -323,7 +326,7 @@ const createUserRequest = async (event) => {
     if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Check that the requested user has an account
-    const requestedUser = await UTIL_getUserFromAuth0(requestBody.email);
+    const requestedUser = await UTIL_getUserFromAuth0ByEmail(requestBody.email);
     if (requestedUser === null || requestedUser === undefined) { return buildResponse(500, 'User with this email address does not exist'); }
 
     // Check that the user isn't already added to the tenancy
@@ -408,6 +411,58 @@ const createUserRequest = async (event) => {
 };
 
 
+const getUsers = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
+    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    const userIDs = Object.keys(tenancy.users);
+    const pendingUserIDs = Object.keys(tenancy.userRequests);
+
+    const users = [];
+
+    try {
+        for (var i = 0; i < userIDs.length; i++) {
+            const user = await UTIL_getUserFromAuth0ByID(userIDs[i]);
+            if (user != null) {
+                users.push({
+                    id: user.user_id,
+                    email: user.email,
+                    name: user.name,
+                    nickname: user.nickname
+                });
+            }
+        }
+        for (var i = 0; i < pendingUserIDs.length; i++) {
+            const user = await UTIL_getUserFromAuth0ByID(pendingUserIDs[i]);
+            if (user != null) {
+                users.push({
+                    id: user.user_id,
+                    email: user.email,
+                    name: user.name,
+                    nickname: user.nickname,
+                    request: tenancy.userRequests[pendingUserIDs[i]]
+                });
+            }
+        }
+        return buildResponse(200, users);
+    }
+    catch (error) {
+        console.log(error);
+        return buildResponse(500, 'Problem')
+    }
+};
+
+
 
 
 
@@ -464,7 +519,7 @@ const UTIL_getAuth0ManagementAPIAccessToken = async () => {
 };
 
 
-const UTIL_getUserFromAuth0 = async (email) => {
+const UTIL_getUserFromAuth0ByEmail = async (email) => {
 
     var user = null;
 
@@ -473,7 +528,6 @@ const UTIL_getUserFromAuth0 = async (email) => {
     });
 
     try {
-
         const accessToken = await UTIL_getAuth0ManagementAPIAccessToken();
 
         const response = await fetch(`https://idsimplify.uk.auth0.com/api/v2/users-by-email?${searchParams}`, {
@@ -484,6 +538,28 @@ const UTIL_getUserFromAuth0 = async (email) => {
 
         const responseData = await response.json();
         user = responseData.find((user) => { return user.email === email }) || null;
+    }
+    catch (error) {
+        console.log(error);
+    }
+    return user;
+};
+
+
+const UTIL_getUserFromAuth0ByID = async (id) => {
+
+    var user = null;
+
+    try {
+        const accessToken = await UTIL_getAuth0ManagementAPIAccessToken();
+
+        const response = await fetch(`https://idsimplify.uk.auth0.com/api/v2/users/${id}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        user = await response.json();
     }
     catch (error) {
         console.log(error);
