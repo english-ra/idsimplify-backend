@@ -44,7 +44,8 @@ const createUser = async (event) => {
         id: requestBody.userId,
         created: requestBody.createdAt,
         lastModified: requestBody.createdAt,
-        tenancies: {}
+        tenancies: {},
+        tenancyRequests: {}
     };
 
     // Build the DB request
@@ -178,139 +179,6 @@ const getUsersTenacyOrganisations = async (event) => {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// async function getProduct(productId) {
-//     const params = {
-//         TableName: dynamodbTableName,
-//         Key: {
-//             'productId': productId
-//         }
-//     }
-//     return await dynamodb.get(params).promise().then((response) => {
-//         return buildResponse(200, response.Item);
-//     }, (error) => {
-//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
-//     });
-// }
-
-// async function getProducts() {
-//     const params = {
-//         TableName: dynamodbTableName
-//     }
-//     const allProducts = await scanDynamoRecords(params, []);
-//     const body = {
-//         products: allProducts
-//     }
-//     return buildResponse(200, body);
-// }
-
-// async function scanDynamoRecords(scanParams, itemArray) {
-//     try {
-//         const dynamoData = await dynamodb.scan(scanParams).promise();
-//         itemArray = itemArray.concat(dynamoData.Items);
-//         if (dynamoData.LastEvaluatedKey) {
-//             scanParams.ExclusiveStartkey = dynamoData.LastEvaluatedKey;
-//             return await scanDynamoRecords(scanParams, itemArray);
-//         }
-//         return itemArray;
-//     } catch (error) {
-//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
-//     }
-// }
-
-// async function modifyProduct(productId, updateKey, updateValue) {
-//     const params = {
-//         TableName: dynamodbTableName,
-//         Key: {
-//             'productId': productId
-//         },
-//         UpdateExpression: `set ${updateKey} = :value`,
-//         ExpressionAttributeValues: {
-//             ':value': updateValue
-//         },
-//         ReturnValues: 'UPDATED_NEW'
-//     }
-//     return await dynamodb.update(params).promise().then((response) => {
-//         const body = {
-//             Operation: 'UPDATE',
-//             Message: 'SUCCESS',
-//             UpdatedAttributes: response
-//         }
-//         return buildResponse(200, body);
-//     }, (error) => {
-//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
-//     })
-// }
-
-// async function deleteProduct(productId) {
-//     const params = {
-//         TableName: dynamodbTableName,
-//         Key: {
-//             'productId': productId
-//         },
-//         ReturnValues: 'ALL_OLD'
-//     }
-//     return await dynamodb.delete(params).promise().then((response) => {
-//         const body = {
-//             Operation: 'DELETE',
-//             Message: 'SUCCESS',
-//             Item: response
-//         }
-//         return buildResponse(200, body);
-//     }, (error) => {
-//         console.error('Do your custom error handling here. I am just gonna log it: ', error);
-//     })
-// }
 
 const UTIL_getTenancy = async (tenancyID) => {
     try {

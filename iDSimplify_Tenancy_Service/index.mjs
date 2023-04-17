@@ -71,7 +71,8 @@ const createTenancy = async (event) => {
                 tenancyPermissions: ['iD-P-1'],
                 organisationPermissions: {}
             }
-        }
+        },
+        userRequests: {}
     };
 
     const tenancyForUser = {
