@@ -165,7 +165,7 @@ const getUsersTenacyOrganisations = async (event) => {
     const user = tenancy.users[requestingUserID];
     if (user === null || user === undefined) { return buildResponse(403, 'User is not a member of this tenancy') };
 
-    const rawOrganisations = user.organisationPermissions;
+    const rawOrganisations = user.permissions.organisation;
     const organisationIDs = Object.keys(rawOrganisations);
 
     // Get the users organisations
