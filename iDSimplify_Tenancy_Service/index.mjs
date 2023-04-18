@@ -36,6 +36,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/integrations':
             response = getOrganisationIntegrations(event);
             break;
+        case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/integrations':
+            response = createOrganisationIntegration(event);
+            break;
         default:
             response = buildResponse(404, '404 Not Found in Lambda');
     }
@@ -468,6 +471,74 @@ const getUsers = async (event) => {
     catch (error) {
         console.log(error);
         return buildResponse(500, 'Problem')
+    }
+};
+
+
+const createOrganisationIntegration = async (event) => {
+
+    const tenancyID = event.pathParameters['tenancy-id'];
+    const organisationID = event.pathParameters['organisation-id'];
+    const requestBody = JSON.parse(event.body);
+
+    // Validate the request data
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Create the integration object
+    const integrationID = crypto.randomUUID().toString();
+    const integration = {
+        name: requestBody.name,
+        type: requestBody.type,
+        credentials: {
+            tenantId: requestBody.tenantID,
+            clientID: requestBody.clientID,
+            clientSecret: requestBody.clientSecret
+        }
+    };
+
+    // Create the update request
+    const dbRequest = {
+        TableName: process.env.TENANCY_DB,
+        Key: {
+            'id': tenancyID
+        },
+        UpdateExpression: 'SET organisations.#organisationID.#integrations.#integrationID = :integration',
+        ExpressionAttributeNames: {
+            '#organisationID': organisationID,
+            '#integrations': 'integrations',
+            '#integrationID': integrationID
+        },
+        ExpressionAttributeValues: {
+            ':integration': integration
+        },
+        ReturnValues: 'UPDATED_NEW'
+    }
+
+    try {
+        // Save data to the DB
+        const response = await db.send(new UpdateCommand(dbRequest));
+
+        // Send back response
+        return buildResponse(200, 'Integration linked successfully');
+    }
+    catch (error) {
+        // An error occurred in saving to the DB
+        console.log('Error', error.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to link integration');
     }
 };
 
