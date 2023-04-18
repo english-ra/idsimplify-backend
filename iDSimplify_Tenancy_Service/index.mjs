@@ -221,6 +221,10 @@ const getOrganisations = async (event) => {
     const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
+    // Check that the user is a member of the tenancy
+    const user = tenancy.users[requestingUserID] || null;
+    if (user === null || user === undefined) { return buildResponse(401, 'You are not authorised to perform this action.'); }
+
     // Access Control - Check that the user has the correct permissions to perform this request
     const userStatus = tenancy.users[requestingUserID].permissions.status || '';
     const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];

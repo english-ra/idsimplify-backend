@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand, TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
 import validateJSONWScheme from './JSONValidator.mjs';
 import schemas from './schemas.mjs';
 
@@ -14,6 +14,15 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies':
             response = getUsersTenancies(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies/invitations':
+            response = getTenancyInvitations(event);
+            break;
+        case event.httpMethod === 'PATCH' && event.resource === '/users/{id}/tenancies/invitations/{tenancy-id}':
+            response = acceptTenancyInvitation(event);
+            break;
+        case event.httpMethod === 'DELETE' && event.resource === '/users/{id}/tenancies/invitations/{tenancy-id}':
+            response = denyTenancyInvitation(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/users/{id}/tenancies/invitations':
             response = getTenancyInvitations(event);
@@ -107,7 +116,7 @@ const getUsersTenancies = async (event) => {
 
     // Build the request
     const dbRequest = {
-        TableName: process.env.USER_TABLE,
+        TableName: process.env.USER_DB,
         Key: { 'id': userID }
     };
 
@@ -121,9 +130,11 @@ const getUsersTenancies = async (event) => {
         const tenancies = response.Item.tenancies;
         const tenancyIDs = Object.keys(tenancies);
         for (let i = 0; i < tenancyIDs.length; i++) {
+            const tenancy = await UTIL_getTenancy(tenancyIDs[i]);
+
             responseData.push({
                 id: tenancyIDs[i],
-                name: tenancies[tenancyIDs[i]].name,
+                name: tenancy.name,
                 permissions: tenancies[tenancyIDs[i]].permissions
             });
         }
@@ -240,7 +251,171 @@ const getTenancyInvitations = async (event) => {
 };
 
 
+const acceptTenancyInvitation = async (event) => {
 
+    // Get the path parameters
+    const pathParameters = event.pathParameters;
+
+    const tenancyID = pathParameters['tenancy-id'];
+
+    // Check whether the user is authorised
+    let userID;
+    if (pathParameters.id === 'me') {
+        // Get the users ID and validate
+        userID = event.requestContext.authorizer.principalId;
+        if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
+    } else {
+        // The user is requesting another users data
+
+        // Check whether their authorised to access this
+
+        // Currently not authorised
+        return buildResponse(401, 'You are not authorised to access this users data')
+    }
+
+    // Confirm that the user has the invitation
+    const user = await UTIL_getUser(userID);
+    if ((user.tenancyInvitations[tenancyID] || null) === null) { return buildResponse(401, 'You do not have this invitation'); }
+
+    // Confirm that the tenancy has this user pending
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    const userFromTenancy = tenancy.users[userID];
+    if (tenancy === null || userFromTenancy === undefined || userFromTenancy.permissions.status != 'pending') { return buildResponse(401, 'Tenancy does not have a pending invitation for this user'); }
+
+    // Query the DB
+    try {
+        // Save data to the DB
+        const response = await db.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.USER_DB,
+                        Key: {
+                            'id': userID
+                        },
+                        UpdateExpression: 'REMOVE tenancyInvitations.#tenancyId SET #tenancies.#tenancyId = :tenancyObject',
+                        ExpressionAttributeNames: {
+                            '#tenancyId': tenancyID,
+                            '#tenancies': 'tenancies'
+                        },
+                        ExpressionAttributeValues: {
+                            ':tenancyObject': { added: Date.now().toString() }
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                },
+                {
+                    Update: {
+                        TableName: process.env.TENANCY_DB,
+                        Key: {
+                            'id': tenancyID
+                        },
+                        UpdateExpression: `SET #users.#userID.#permissions.#status = :status`,
+                        ExpressionAttributeNames: {
+                            '#users': 'users',
+                            '#userID': userID,
+                            '#permissions': 'permissions',
+                            '#status': 'status'
+                        },
+                        ExpressionAttributeValues: {
+                            ':status': 'member'
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                }
+            ]
+        }));
+
+        // Send back response
+        return buildResponse(200, 'Invititation accepted successfully');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to accept invitation');
+    }
+};
+
+
+const denyTenancyInvitation = async (event) => {
+
+    // Get the path parameters
+    const pathParameters = event.pathParameters;
+
+    const tenancyID = pathParameters['tenancy-id'];
+
+    // Check whether the user is authorised
+    let userID;
+    if (pathParameters.id === 'me') {
+        // Get the users ID and validate
+        userID = event.requestContext.authorizer.principalId;
+        if (userID === null || userID === undefined) { return buildResponse(400, 'User not defined'); }
+    } else {
+        // The user is requesting another users data
+
+        // Check whether their authorised to access this
+
+        // Currently not authorised
+        return buildResponse(401, 'You are not authorised to access this users data')
+    }
+
+    // Confirm that the user has the invitation
+    const user = await UTIL_getUser(userID);
+    if ((user.tenancyInvitations[tenancyID] || null) === null) { return buildResponse(401, 'You do not have this invitation'); }
+
+    // Confirm that the tenancy has this user pending
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    const userFromTenancy = tenancy.users[userID];
+    if (tenancy === null || userFromTenancy === undefined || userFromTenancy.permissions.status != 'pending') { return buildResponse(401, 'Tenancy does not have a pending invitation for this user'); }
+
+    // Query the DB
+    try {
+        // Save data to the DB
+        const response = await db.send(new TransactWriteCommand({
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.USER_DB,
+                        Key: {
+                            'id': userID
+                        },
+                        UpdateExpression: 'REMOVE tenancyInvitations.#tenancyId',
+                        ExpressionAttributeNames: {
+                            '#tenancyId': tenancyID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                },
+                {
+                    Update: {
+                        TableName: process.env.TENANCY_DB,
+                        Key: {
+                            'id': tenancyID
+                        },
+                        UpdateExpression: `REMOVE #users.#userID`,
+                        ExpressionAttributeNames: {
+                            '#users': 'users',
+                            '#userID': userID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                }
+            ]
+        }));
+
+        // Send back response
+        return buildResponse(200, 'Invititation denied successfully');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to deny invitation');
+    }
+};
 
 
 
@@ -252,6 +427,22 @@ const UTIL_getTenancy = async (tenancyID) => {
     try {
         // Query the DB
         const response = await db.send(new GetCommand({ TableName: process.env.TENANCY_DB, Key: { 'id': tenancyID } }));
+        return response.Item;
+    }
+    catch (err) {
+        // An error occurred whilst querying the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return null;
+    }
+};
+
+
+const UTIL_getUser = async (userID) => {
+    try {
+        // Query the DB
+        const response = await db.send(new GetCommand({ TableName: process.env.USER_DB, Key: { 'id': userID } }));
         return response.Item;
     }
     catch (err) {
