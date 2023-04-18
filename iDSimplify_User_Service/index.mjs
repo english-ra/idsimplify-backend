@@ -208,13 +208,16 @@ const getTenancyInvitations = async (event) => {
         // Prepare the data
         const responseData = [];
 
-        const tenancies = response.Item.tenancies;
-        const tenancyIDs = Object.keys(tenancies);
+        const tenancyInvitations = response.Item.tenancyInvitations;
+        const tenancyIDs = Object.keys(tenancyInvitations);
+
         for (let i = 0; i < tenancyIDs.length; i++) {
+
+            const tenancy = await UTIL_getTenancy(tenancyIDs[i]);
+
             responseData.push({
                 id: tenancyIDs[i],
-                name: tenancies[tenancyIDs[i]].name,
-                permissions: tenancies[tenancyIDs[i]].permissions
+                name: tenancy.name
             });
         }
 
