@@ -214,10 +214,17 @@ const getTenancyInvitations = async (event) => {
         for (let i = 0; i < tenancyIDs.length; i++) {
 
             const tenancy = await UTIL_getTenancy(tenancyIDs[i]);
+            const invitingUser = await UTIL_getUserFromAuth0ByID(tenancyInvitations[tenancyIDs[i]].invitedBy);
 
             responseData.push({
                 id: tenancyIDs[i],
-                name: tenancy.name
+                name: tenancy.name,
+                sent: tenancyInvitations[tenancyIDs[i]].sent,
+                invitedBy: {
+                    id: tenancyInvitations[tenancyIDs[i]].invitedBy,
+                    name: invitingUser.name,
+                    email: invitingUser.email
+                }
             });
         }
 
@@ -255,6 +262,64 @@ const UTIL_getTenancy = async (tenancyID) => {
         return null;
     }
 };
+
+
+const UTIL_getAuth0ManagementAPIAccessToken = async () => {
+
+    // Get the access token for the API
+    var accessToken = undefined;
+
+    try {
+        var headers = new Headers();
+        headers.append("Content-Type", "application/json");
+
+        const body = {
+            client_id: process.env.AUTH0_MANAGEMENT_API_CLIENT_ID,
+            client_secret: process.env.AUTH0_MANAGEMENT_API_CLIENT_SECRET,
+            audience: process.env.AUTH0_MANAGEMENT_API_AUDIENCE,
+            grant_type: 'client_credentials'
+        };
+
+        var requestOptions = {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body)
+        };
+
+        const response = await fetch('https://idsimplify.uk.auth0.com/oauth/token', requestOptions);
+
+        const responseData = await response.json();
+        accessToken = responseData.access_token;
+    }
+    catch (error) {
+        console.log(error);
+    }
+
+    return accessToken;
+};
+
+
+const UTIL_getUserFromAuth0ByID = async (id) => {
+
+    var user = null;
+
+    try {
+        const accessToken = await UTIL_getAuth0ManagementAPIAccessToken();
+
+        const response = await fetch(`https://idsimplify.uk.auth0.com/api/v2/users/${id}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        user = await response.json();
+    }
+    catch (error) {
+        console.log(error);
+    }
+    return user;
+};
+
 
 function buildResponse(statusCode, body) {
     return {

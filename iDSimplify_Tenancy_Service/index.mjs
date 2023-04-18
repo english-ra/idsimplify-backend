@@ -351,7 +351,8 @@ const createUserRequest = async (event) => {
 
     // Create the request object
     const request = {
-        sent: Date.now().toString()
+        sent: Date.now().toString(),
+        invitedBy: requestingUserID
     }
 
     // Query the DB
