@@ -74,11 +74,13 @@ const createTenancy = async (event) => {
         organisations: {},
         users: {
             [requestingUserID]: {
-                tenancyPermissions: ['iD-P-1'],
-                organisationPermissions: {}
+                permissions: {
+                    status: 'member',
+                    tenancy: ['iD-P-1'],
+                    organisation: {}
+                }
             }
-        },
-        userRequests: {}
+        }
     };
 
     const tenancyForUser = {
@@ -161,8 +163,9 @@ const createOrganisation = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Create the organisation object
     const organisationID = crypto.randomUUID().toString();
@@ -177,15 +180,16 @@ const createOrganisation = async (event) => {
         Key: {
             'id': tenancyID
         },
-        UpdateExpression: 'SET organisations.#organisationID = :organisation, #users.#userID.organisationPermissions = :organisationPermission',
+        UpdateExpression: 'SET organisations.#organisationID = :organisation, #users.#userID.#permissions.organisation.#organisationID = :organisationPermission',
         ExpressionAttributeNames: {
             '#users': 'users',
             '#organisationID': organisationID,
-            '#userID': requestingUserID
+            '#userID': requestingUserID,
+            '#permissions': 'permissions'
         },
         ExpressionAttributeValues: {
             ':organisation': organisation,
-            ':organisationPermission': { [organisationID]: ['iD-P-10000'] }
+            ':organisationPermission': ['iD-P-10000']
         },
         ReturnValues: 'UPDATED_NEW'
     }
@@ -218,8 +222,9 @@ const getOrganisations = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     const rawOrganisations = tenancy.organisations;
     const organisationIDs = Object.keys(rawOrganisations);
@@ -248,8 +253,9 @@ const getOrganisation = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Extract the organisation from the tenancy
     const organisationID = event.pathParameters['organisation-id'];
@@ -279,8 +285,9 @@ const getOrganisationIntegrations = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Extract the organisation from the tenancy
     const organisationID = event.pathParameters['organisation-id'];
@@ -322,8 +329,9 @@ const createUserRequest = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     // Check that the requested user has an account
     const requestedUser = await UTIL_getUserFromAuth0ByEmail(requestBody.email);
@@ -332,8 +340,14 @@ const createUserRequest = async (event) => {
     // Check that the user isn't already added to the tenancy
     if (tenancy.users[requestedUser.user_id] || null != null) { return buildResponse(500, 'User is already a member of this tenancy') }
 
-    // Check that this user doesn't already have a pending request
-    if (tenancy.userRequests[requestedUser.user_id] || null != null) { return buildResponse(500, 'User already has a pending request'); }
+    // Create the user object
+    const user = {
+        permissions: {
+            status: 'pending',
+            tenancy: [],
+            organisation: {}
+        }
+    };
 
     // Create the request object
     const request = {
@@ -351,12 +365,13 @@ const createUserRequest = async (event) => {
                         Key: {
                             'id': tenancyID
                         },
-                        UpdateExpression: `SET userRequests.#userID = :request`,
+                        UpdateExpression: `SET #users.#userID = :user`,
                         ExpressionAttributeNames: {
+                            '#users': 'users',
                             '#userID': requestedUser.user_id
                         },
                         ExpressionAttributeValues: {
-                            ':request': request
+                            ':user': user
                         },
                         ReturnValues: 'UPDATED_NEW'
                     }
@@ -367,7 +382,7 @@ const createUserRequest = async (event) => {
                         Key: {
                             'id': requestedUser.user_id
                         },
-                        UpdateExpression: `SET tenancyRequests.#tenancyId = :request`,
+                        UpdateExpression: `SET tenancyInvitations.#tenancyId = :request`,
                         ExpressionAttributeNames: {
                             '#tenancyId': tenancy.id
                         },
@@ -422,11 +437,11 @@ const getUsers = async (event) => {
     if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
 
     // Access Control - Check that the user has the correct permissions to perform this request
-    const userPermissions = tenancy.users[requestingUserID].tenancyPermissions || [];
-    if (!userPermissions.includes('iD-P-1')) { return buildResponse(401, 'You are not authorised to perform this action.') }
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
 
     const userIDs = Object.keys(tenancy.users);
-    const pendingUserIDs = Object.keys(tenancy.userRequests);
 
     const users = [];
 
@@ -438,19 +453,8 @@ const getUsers = async (event) => {
                     id: user.user_id,
                     email: user.email,
                     name: user.name,
-                    nickname: user.nickname
-                });
-            }
-        }
-        for (var i = 0; i < pendingUserIDs.length; i++) {
-            const user = await UTIL_getUserFromAuth0ByID(pendingUserIDs[i]);
-            if (user != null) {
-                users.push({
-                    id: user.user_id,
-                    email: user.email,
-                    name: user.name,
                     nickname: user.nickname,
-                    request: tenancy.userRequests[pendingUserIDs[i]]
+                    status: tenancy.users[userIDs[i]].permissions.status
                 });
             }
         }
