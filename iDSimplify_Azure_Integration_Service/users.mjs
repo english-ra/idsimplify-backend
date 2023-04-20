@@ -1,19 +1,26 @@
 import { getAzureAccessToken } from './AzureUtility.mjs';
-import { buildResponse } from './Utility.mjs';
+import { buildResponse, accessControl, getAzureCredentials, UTIL_getTenancy } from './Utility.mjs';
 import { validateJSONWSchema } from './JSONValidator.mjs';
 import schemas from "./schemas.mjs";
 
-export const getUsers = async (requestBody, requestContext) => {
+export const getUsers = async (event) => {
 
-    // TODO: Confirm that the user is authorised for this
+    const tenancyID = event.queryStringParameters['tenancy-id'];
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the users from Azure
@@ -42,7 +49,23 @@ export const getUsers = async (requestBody, requestContext) => {
 
 export const createUser = async (event) => {
 
-    // TODO: Confirm that the user is authorised for this
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
+
+    // Get the access token for the Graph API and confirm it's valid
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
+    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the user for creations data
     const creationUserData = JSON.parse(event.body);
@@ -50,15 +73,6 @@ export const createUser = async (event) => {
     // Validate the request data
     // const isDataValid = validateJSONWSchema(creationUserData, schemas['creationUser']);
     // if (!isDataValid) { return buildResponse(400, 'Incorrect data'); }
-
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
-
-    // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
-    if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Query the Azure Graph API
     var responseData = null;
@@ -101,19 +115,26 @@ export const createUser = async (event) => {
 
 export const getUser = async (event) => {
 
-    // TODO: Confirm that the user is authorised for this
-
     // Get the id of the user being queried
     const pathParameters = event.pathParameters;
     const queriedUserID = pathParameters.id;
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the users from Azure
@@ -144,19 +165,26 @@ export const getUser = async (event) => {
 
 export const getUserGroups = async (event) => {
 
-    // TODO: Confirm that the user is authorised for this
-
     // Get the id of the user being queried
     const pathParameters = event.pathParameters;
     const queriedUserID = pathParameters.id;
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the users from Azure
@@ -185,19 +213,26 @@ export const getUserGroups = async (event) => {
 
 export const resetPassword = async (event) => {
 
-    // TODO: Confirm that the requesting user is authorised to perform this action
-
     // Get the id of the user being queried
     const pathParameters = event.pathParameters;
     const queriedUserID = pathParameters.id;
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Query the Azure Graph API
@@ -225,19 +260,26 @@ export const resetPassword = async (event) => {
 
 export const enableUser = async (event) => {
 
-    // TODO: Confirm that the requesting user is authorised to perform this action
-
     // Get the id of the user being queried
     const pathParameters = event.pathParameters;
     const queriedUserID = pathParameters.id;
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Query the Azure Graph API
@@ -271,19 +313,26 @@ export const enableUser = async (event) => {
 
 export const disableUser = async (event) => {
 
-    // TODO: Confirm that the requesting user is authorised to perform this action
-
     // Get the id of the user being queried
     const pathParameters = event.pathParameters;
     const queriedUserID = pathParameters.id;
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    const tenancyID = event.queryStringParameters['tenancy-id'];
+
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Query the Azure Graph API

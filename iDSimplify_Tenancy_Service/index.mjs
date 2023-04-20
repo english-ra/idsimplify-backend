@@ -33,6 +33,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}':
             response = getOrganisation(event);
             break;
+        case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/users':
+            response = getOrganisationUsers(event);
+            break;
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/integrations':
             response = getOrganisationIntegrations(event);
             break;
@@ -472,6 +475,46 @@ const getUsers = async (event) => {
         console.log(error);
         return buildResponse(500, 'Problem')
     }
+};
+
+
+const getOrganisationUsers = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(event.pathParameters['tenancy-id']);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Extract the users from the tenancy
+    const users = tenancy.users;
+    const organisationID = event.pathParameters['organisation-id'];
+    const organisationUsers = [];
+    for (var userID in users) {
+        const user = users[userID];
+        const organisation = user.permissions.organisation[organisationID];
+        if (organisation != undefined) {
+
+            // Get the users details from Auth0
+            const auth0User = await UTIL_getUserFromAuth0ByID(userID);
+
+            organisationUsers.push({
+                id: userID,
+                name: auth0User.name,
+                email: auth0User.email,
+                permissions: organisation
+            });
+        }
+    }
+
+    return buildResponse(200, organisationUsers);
 };
 
 

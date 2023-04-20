@@ -1,17 +1,24 @@
 import { getAzureAccessToken } from './AzureUtility.mjs';
-import { buildResponse } from './Utility.mjs';
+import { buildResponse, accessControl, getAzureCredentials, UTIL_getTenancy } from './Utility.mjs';
 
 export const getDomains = async (event) => {
 
-    // TODO: Confirm that the user is authorised for this
+    const tenancyID = event.queryStringParameters['tenancy-id'];
 
-    // Get the relevant integration details
-    const tenantID = '58cf20ee-3772-4478-9af3-d1972f80609c';
-    const clientID = 'b2d3f318-1ae0-4a2b-b62e-e33d8f9cd8d8';
-    const clientSecret = 'EUQ8Q~07deBRW1HGFv9E1BNA3oDxdcmDpft5Sbek';
+    // Check the tenancy exists
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
+
+    // Confirm that the user is authorised for this
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    if (isAuthorised != 'accessGranted') { return isAuthorised; }
+
+    // Get Azure credentials
+    const credentials = getAzureCredentials(event, tenancy);
+    if (credentials === undefined) { return buildResponse(500, 'Unable to get integration details'); }
 
     // Get the access token for the Graph API and confirm it's valid
-    var azureAccessToken = await getAzureAccessToken(tenantID, clientID, clientSecret);
+    var azureAccessToken = await getAzureAccessToken(credentials.tenantId, credentials.clientID, credentials.clientSecret);
     if (azureAccessToken === undefined || azureAccessToken === null) { return buildResponse(401, 'Unable to authenticate with Azure'); }
 
     // Get the users from Azure
