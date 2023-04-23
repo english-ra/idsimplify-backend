@@ -24,6 +24,9 @@ export const handler = async (event) => {
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/users':
             response = getUsers(event);
             break;
+        case event.httpMethod === 'DELETE' && event.resource === '/tenancies/{tenancy-id}/users/{user-id}':
+            response = deleteUser(event);
+            break;
         case event.httpMethod === 'POST' && event.resource === '/tenancies/{tenancy-id}/organisations':
             response = createOrganisation(event);
             break;
@@ -32,6 +35,9 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}':
             response = getOrganisation(event);
+            break;
+        case event.httpMethod === 'DELETE' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}':
+            response = deleteOrganisation(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/tenancies/{tenancy-id}/organisations/{organisation-id}/users':
             response = getOrganisationUsers(event);
@@ -287,6 +293,79 @@ const getOrganisation = async (event) => {
 };
 
 
+const deleteOrganisation = async (event) => {
+
+    const tenancyID = event.pathParameters['tenancy-id'];
+    const organisationID = event.pathParameters['organisation-id'];
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    // Find all the users who have permissions for this organisation
+    const userIDs = Object.keys(tenancy.users);
+    const users = tenancy.users;
+    var updateExpression = '';
+    var expressionAttributeNames = {};
+    var index = 0;
+    for (var id of userIDs) {
+        if (users[id].permissions.organisation[organisationID] != undefined) {
+            // This user has permissions for this organisation
+
+            // Add this user to the remove update expression
+            updateExpression += `, #users.#user${index}.#permissions.organisation.#organisationID`;
+
+            // Add the required attribute names
+            expressionAttributeNames[`#user${index}`] = id;
+        }
+        index += 1;
+    }
+
+    console.log(updateExpression);
+    console.log(expressionAttributeNames);
+
+    // Create the update request
+    const dbRequest = {
+        TableName: process.env.TENANCY_DB,
+        Key: {
+            'id': tenancyID
+        },
+        UpdateExpression: `REMOVE organisations.#organisationID${updateExpression}`,
+        ExpressionAttributeNames: {
+            '#users': 'users',
+            '#organisationID': organisationID,
+            '#permissions': 'permissions',
+            ...expressionAttributeNames
+        },
+        ReturnValues: 'UPDATED_NEW'
+    }
+
+    try {
+        // Save data to the DB
+        const response = await db.send(new UpdateCommand(dbRequest));
+
+        // Send back response
+        return buildResponse(200, 'Organisation deleted successfully');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to delete organisation');
+    }
+};
+
+
 const getOrganisationIntegrations = async (event) => {
 
     // Get the requesting users ID
@@ -477,6 +556,123 @@ const getUsers = async (event) => {
     catch (error) {
         console.log(error);
         return buildResponse(500, 'Problem')
+    }
+};
+
+
+const deleteUser = async (event) => {
+
+    // Get the requesting users ID
+    const requestingUserID = event.requestContext.authorizer.principalId;
+    if (requestingUserID === null || requestingUserID === undefined) { return buildResponse(400, 'User not defined'); }
+
+    // Get the tenancy
+    const tenancyID = event.pathParameters['tenancy-id'];
+    const tenancy = await UTIL_getTenancy(tenancyID);
+    if (tenancy === null || tenancy === undefined) { return buildResponse(500, 'Unable to get tenancy') }
+
+    // Access Control - Check that the user has the correct permissions to perform this request
+    const userStatus = tenancy.users[requestingUserID].permissions.status || '';
+    const userTenancyPermissions = tenancy.users[requestingUserID].permissions.tenancy || [];
+    if (!userTenancyPermissions.includes('iD-P-1') && userStatus === 'member') { return buildResponse(401, 'You are not authorised to perform this action.') }
+
+    const userID = decodeURIComponent(event.pathParameters['user-id']);
+
+    // Confirm that there will still be an admin user in the tenancy
+    const userIDs = Object.keys(tenancy.users);
+    var adminUsers = 0;
+    for (var id of userIDs) {
+        if (id === userID) { continue; }
+        const s = tenancy.users[id].permissions.status || '';
+        const p = tenancy.users[id].permissions.tenancy || [];
+        if (s === 'member' && p.includes('iD-P-1')) { adminUsers += 1; }
+    }
+    if (adminUsers < 1) { return buildResponse(500, 'Unable to remove user. There must be at least one admin user remaining in the tenancy with the permission: iD-P-1'); }
+
+    // Find out whether the using wanting deleting is pending or not
+    const status = tenancy.users[userID].permissions.status || '';
+    var dbRequest;
+    if (status === 'member') {
+        dbRequest = {
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.TENANCY_DB,
+                        Key: {
+                            'id': tenancyID
+                        },
+                        UpdateExpression: `REMOVE #users.#userID`,
+                        ExpressionAttributeNames: {
+                            '#users': 'users',
+                            '#userID': userID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                },
+                {
+                    Update: {
+                        TableName: process.env.USER_DB,
+                        Key: {
+                            'id': userID
+                        },
+                        UpdateExpression: `REMOVE #tenancies.#tenancyId`,
+                        ExpressionAttributeNames: {
+                            '#tenancies': 'tenancies',
+                            '#tenancyId': tenancyID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                }
+            ]
+        }
+    } else if (status === 'pending') {
+        dbRequest = {
+            TransactItems: [
+                {
+                    Update: {
+                        TableName: process.env.TENANCY_DB,
+                        Key: {
+                            'id': tenancyID
+                        },
+                        UpdateExpression: `REMOVE #users.#userID`,
+                        ExpressionAttributeNames: {
+                            '#users': 'users',
+                            '#userID': userID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                },
+                {
+                    Update: {
+                        TableName: process.env.USER_DB,
+                        Key: {
+                            'id': userID
+                        },
+                        UpdateExpression: `REMOVE #tenancyInvitations.#tenancyId`,
+                        ExpressionAttributeNames: {
+                            '#tenancyInvitations': 'tenancyInvitations',
+                            '#tenancyId': tenancyID
+                        },
+                        ReturnValues: 'UPDATED_NEW'
+                    }
+                }
+            ]
+        }
+    }
+
+    // Query the DB
+    try {
+        const response = await db.send(new TransactWriteCommand(dbRequest));
+
+        // Send back response
+        return buildResponse(200, 'User successfully removed from tenancy');
+    }
+    catch (err) {
+        // An error occurred in saving to the DB
+        console.log('Error', err.stack);
+
+        // Send back response
+        return buildResponse(500, 'Unable to remove user from tenancy');
     }
 };
 
