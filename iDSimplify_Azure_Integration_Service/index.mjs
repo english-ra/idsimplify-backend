@@ -8,6 +8,10 @@ import {
     disableUser,
     createUser
 } from './users.mjs';
+import {
+    getGroups,
+    createGroup
+} from './groups.mjs';
 import { buildResponse } from './Utility.mjs';
 
 export const handler = async (event) => {
@@ -34,6 +38,12 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'PATCH' && event.resource === '/integrations/users/{id}/disable':
             response = disableUser(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/integrations/groups':
+            response = getGroups(event);
+            break;
+        case event.httpMethod === 'POST' && event.resource === '/integrations/groups':
+            response = createGroup(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/integrations/domains':
             response = getDomains(event);

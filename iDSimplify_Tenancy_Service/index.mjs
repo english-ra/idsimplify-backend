@@ -811,7 +811,7 @@ const createOrganisationIntegration = async (event) => {
     const integrationID = crypto.randomUUID().toString();
     const integration = {
         name: requestBody.name,
-        type: requestBody.type,
+        type: 'Microsoft Azure AD',
         credentials: {
             tenantId: requestBody.tenantID,
             clientID: requestBody.clientID,
