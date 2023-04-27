@@ -148,15 +148,22 @@ const createTenancy = async (event) => {
             ]
         }));
 
-        // Successful save - Build the response
-        const responseBody = {
-            Operation: 'SAVE',
-            Message: 'Tenancy created successfully',
-            Item: response
-        };
+        // Get the user from Auth0
+        const user = await UTIL_getUserFromAuth0ByID(requestingUserID);
+
+        await UTIL_sendEmail({
+            to: user.email,
+            subject: `You have successfully created ${tenancy.name}`,
+            content: [
+                {
+                    "type": "text/plain",
+                    "value": `You can now access organisation center for this tenancy and begin to configure it. Please go to https://idsimplify.co.uk/oc/${tenancy.id}`
+                }
+            ]
+        });
 
         // Send back response
-        return buildResponse(200, responseBody);
+        return buildResponse(200, 'Successful tenancy creation');
     }
     catch (err) {
         // An error occurred in saving to the DB
@@ -218,6 +225,20 @@ const createOrganisation = async (event) => {
     try {
         // Save data to the DB
         const response = await db.send(new UpdateCommand(dbRequest));
+
+        // Get the user from Auth0
+        const user = await UTIL_getUserFromAuth0ByID(requestingUserID);
+
+        await UTIL_sendEmail({
+            to: user.email,
+            subject: `You have successfully created ${organisation.name}`,
+            content: [
+                {
+                    "type": "text/plain",
+                    "value": `You can now access organisation center for this tenancy and begin to configure it. Please go to https://idsimplify.co.uk/oc`
+                }
+            ]
+        });
 
         // Send back response
         return buildResponse(200, 'Organisation created successfully');
