@@ -6,7 +6,8 @@ import {
     resetPassword,
     enableUser,
     disableUser,
-    createUser
+    createUser,
+    deleteUser
 } from './users.mjs';
 import {
     getGroups,
@@ -26,6 +27,9 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'GET' && event.resource === '/integrations/users/{id}':
             response = getUser(event);
+            break;
+        case event.httpMethod === 'DELETE' && event.resource === '/integrations/users/{id}':
+            response = deleteUser(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/integrations/users/{id}/groups':
             response = getUserGroups(event);
