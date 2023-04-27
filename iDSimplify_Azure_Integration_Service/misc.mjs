@@ -10,7 +10,7 @@ export const getDomains = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10011', 'iD-P-10015']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials

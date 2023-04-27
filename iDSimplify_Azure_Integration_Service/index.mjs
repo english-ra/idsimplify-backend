@@ -11,7 +11,10 @@ import {
 } from './users.mjs';
 import {
     getGroups,
-    createGroup
+    getGroup,
+    createGroup,
+    deleteGroup,
+    getGroupMembers
 } from './groups.mjs';
 import { buildResponse } from './Utility.mjs';
 
@@ -48,6 +51,15 @@ export const handler = async (event) => {
             break;
         case event.httpMethod === 'POST' && event.resource === '/integrations/groups':
             response = createGroup(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/integrations/groups/{id}':
+            response = getGroup(event);
+            break;
+        case event.httpMethod === 'DELETE' && event.resource === '/integrations/groups/{id}':
+            response = deleteGroup(event);
+            break;
+        case event.httpMethod === 'GET' && event.resource === '/integrations/groups/{id}/members':
+            response = getGroupMembers(event);
             break;
         case event.httpMethod === 'GET' && event.resource === '/integrations/domains':
             response = getDomains(event);

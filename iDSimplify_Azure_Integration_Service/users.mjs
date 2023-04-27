@@ -12,7 +12,7 @@ export const getUsers = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10010']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -56,7 +56,7 @@ export const createUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10011']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -126,7 +126,7 @@ export const getUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10010']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -176,7 +176,7 @@ export const deleteUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10013']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -222,7 +222,7 @@ export const getUserGroups = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10010']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -317,7 +317,7 @@ export const enableUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -370,7 +370,7 @@ export const disableUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
