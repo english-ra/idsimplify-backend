@@ -12,7 +12,7 @@ export const getUsers = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10010']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10010', 'iD-P-20000']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -34,7 +34,9 @@ export const getUsers = async (event) => {
             headers: myHeaders
         };
 
-        const response = await fetch('https://graph.microsoft.com/v1.0/users', requestOptions);
+        const fields = '$select=id,displayName,accountEnabled,givenName,userPrincipalName,jobTitle,mail,surname';
+
+        const response = await fetch(`https://graph.microsoft.com/v1.0/users?${fields}`, requestOptions);
 
         userData = await response.json();
     }
@@ -317,7 +319,7 @@ export const enableUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012', 'iD-P-20000']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
@@ -370,7 +372,7 @@ export const disableUser = async (event) => {
     if (tenancy === null) { return buildResponse(500, 'Tenancy does not exist'); }
 
     // Confirm that the user is authorised for this
-    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012']);
+    const isAuthorised = await accessControl(event, tenancy, ['iD-P-10000', 'iD-P-10012', 'iD-P-20000']);
     if (isAuthorised != 'accessGranted') { return isAuthorised; }
 
     // Get Azure credentials
