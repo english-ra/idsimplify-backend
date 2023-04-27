@@ -235,7 +235,7 @@ const createOrganisation = async (event) => {
             content: [
                 {
                     "type": "text/plain",
-                    "value": `You can now access organisation center for this tenancy and begin to configure it. Please go to https://idsimplify.co.uk/oc`
+                    "value": `You can now access organisation center for this tenancy and begin to configure it. Please go to https://idsimplify.co.uk/oc/${tenancyID}/organisations/${organisationID}`
                 }
             ]
         });
@@ -357,9 +357,6 @@ const deleteOrganisation = async (event) => {
         index += 1;
     }
 
-    console.log(updateExpression);
-    console.log(expressionAttributeNames);
-
     // Create the update request
     const dbRequest = {
         TableName: process.env.TENANCY_DB,
@@ -379,6 +376,20 @@ const deleteOrganisation = async (event) => {
     try {
         // Save data to the DB
         const response = await db.send(new UpdateCommand(dbRequest));
+
+        // Get the user from Auth0
+        const user = await UTIL_getUserFromAuth0ByID(requestingUserID);
+
+        await UTIL_sendEmail({
+            to: user.email,
+            subject: `You have successfully deleted an organisation`,
+            content: [
+                {
+                    "type": "text/plain",
+                    "value": 'This confirm that the organisation has now been deleted.'
+                }
+            ]
+        });
 
         // Send back response
         return buildResponse(200, 'Organisation deleted successfully');
