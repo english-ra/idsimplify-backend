@@ -1,7 +1,6 @@
 # dependencies
 /iDSimplify_Auth0_Custom_Authoriser/node_modules
 /iDSimplify_User_Service/node_modules
-/iDSimplify_Organisation_Service/node_modules
 /iDSimplify_Tenancy_Service/node_modules
 /iDSimplify_Azure_Integration_Service/node_modules
 /.pnp
